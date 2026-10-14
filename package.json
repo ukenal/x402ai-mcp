@@ -1,14 +1,33 @@
 {
   "name": "x402ai-mcp",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "version": "0.1.0",
+  "description": "Local stdio MCP server that lets an AI client buy embed, summarize and ask calls from api.x402ai.dev via x402 (USDC on Base), with per-payment and per-session spend caps.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "x402ai-mcp": "dist/index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "x402",
+    "usdc",
+    "base",
+    "payments"
+  ],
+  "author": "Landy Ukena",
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
     "@x402/core": "2.28.0",
