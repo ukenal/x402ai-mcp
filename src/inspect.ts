@@ -61,6 +61,10 @@ function blockedAddress(address: string): boolean {
     // ::ffff:a.b.c.d (IPv4-mapped) and ::a.b.c.d (IPv4-compatible)
     const mapped = g.slice(0, 5).every((x) => x === 0) && (g[5] === 0xffff || g[5] === 0);
     if (mapped) return blockedIPv4(g[6]! >> 8, g[6]! & 0xff);
+    // 64:ff9b::/96 (NAT64 well-known prefix): embedded IPv4 is in groups 6-7
+    if (g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0)) return blockedIPv4(g[6]! >> 8, g[6]! & 0xff);
+    // 2002::/16 (6to4): embedded IPv4 is in groups 1-2
+    if (g[0] === 0x2002) return blockedIPv4(g[1]! >> 8, g[1]! & 0xff);
     return false;
   }
   return true; // not an IP at all: refuse

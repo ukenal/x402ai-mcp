@@ -14,24 +14,16 @@ export class UserError extends Error {}
 
 // ---- guard (pure; shared by the live hook and dry-run) ---------------------
 
-/** Exact match of the challenge's resource URL against BASE_URL + route.path. */
-function routeForResource(resourceUrl: string | undefined) {
-  if (!resourceUrl) return undefined;
-  for (const route of Object.values(ROUTES)) {
-    if (resourceUrl === BASE_URL + route.path) return route;
-  }
-  return undefined;
-}
-
+/** Bound to the calling tool's own route: resource URL must equal BASE_URL + route.path exactly. */
 export function checkRequirement(
   r: { payTo: string; asset: string; network: string; amount: string },
   resourceUrl: string | undefined,
+  route: (typeof ROUTES)[PaidTool],
 ): string | undefined {
   if (r.network !== EXPECTED.network) return `network ${r.network} is not ${EXPECTED.network}`;
   if (r.asset.toLowerCase() !== EXPECTED.asset.toLowerCase()) return `asset ${r.asset} is not the expected USDC contract`;
   if (r.payTo.toLowerCase() !== EXPECTED.payTo.toLowerCase()) return `payTo ${r.payTo} is not the expected recipient`;
-  const route = routeForResource(resourceUrl);
-  if (!route) return `resource ${resourceUrl ?? "(none)"} is not a known x402ai route`;
+  if (resourceUrl !== BASE_URL + route.path) return `resource ${resourceUrl ?? "(none)"} is not this tool's route ${BASE_URL + route.path}`;
   if (!/^\d+$/.test(r.amount)) return `amount ${r.amount} is not an atomic integer`;
   if (BigInt(r.amount) > route.maxAtomic) {
     return `amount ${r.amount} exceeds this route's cap of ${route.maxAtomic} (${route.price})`;
@@ -112,7 +104,8 @@ export async function probe(url: string, method: "GET" | "POST"): Promise<ProbeR
 
 export class PaymentRuntime {
   readonly budget: SessionBudget;
-  private payingFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  private account?: ReturnType<typeof privateKeyToAccount>;
+  private readonly fetchByTool = new Map<PaidTool, (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
   buyerAddress?: string;
 
   constructor(readonly config: Config) {
@@ -126,8 +119,8 @@ export class PaymentRuntime {
     return text.split(key).join("[redacted]").split(key.slice(2)).join("[redacted]");
   }
 
-  private getFetch() {
-    if (this.payingFetch) return this.payingFetch;
+  private getAccount() {
+    if (this.account) return this.account;
     if (this.config.keyProblem) throw new UserError(this.config.keyProblem);
     if (!this.config.privateKey) {
       throw new UserError("X402AI_BUYER_PRIVATE_KEY is not set. Paid tools (embed, summarize, ask) need a funded Base USDC buyer key; health and inspect work without it.");
@@ -138,7 +131,17 @@ export class PaymentRuntime {
     } catch {
       throw new UserError("X402AI_BUYER_PRIVATE_KEY could not be used to create a signer."); // never echo the key or viem's message
     }
+    this.account = account;
     this.buyerAddress = account.address;
+    log(`buyer address ${account.address}; session cap $${atomicToUsd(this.budget.cap)}`);
+    return account;
+  }
+
+  private getFetch(tool: PaidTool) {
+    const cached = this.fetchByTool.get(tool);
+    if (cached) return cached;
+    const account = this.getAccount();
+    const route = ROUTES[tool];
 
     const client = x402Client.fromConfig({
       schemes: [{ network: EXPECTED.network, client: new ExactEvmScheme(account) }],
@@ -146,7 +149,7 @@ export class PaymentRuntime {
     });
     // Hook order matters: guard first, session cap second (a guard abort must not reserve budget).
     client.onBeforePaymentCreation(async ({ paymentRequired, selectedRequirements: r }) => {
-      const problem = checkRequirement(r, paymentRequired.resource?.url);
+      const problem = checkRequirement(r, paymentRequired.resource?.url, route);
       if (problem) return { abort: true as const, reason: problem };
     });
     client.onBeforePaymentCreation(async ({ selectedRequirements: r }) => {
@@ -157,9 +160,9 @@ export class PaymentRuntime {
       this.budget.release(BigInt(r.amount)); // nothing was signed
     });
 
-    this.payingFetch = wrapFetchWithPayment(fetch, client);
-    log(`buyer address ${account.address}; session cap $${atomicToUsd(this.budget.cap)}`);
-    return this.payingFetch;
+    const payingFetch = wrapFetchWithPayment(fetch, client);
+    this.fetchByTool.set(tool, payingFetch);
+    return payingFetch;
   }
 
   /** Dry run: decode the price quote without signing. */
@@ -179,7 +182,7 @@ export class PaymentRuntime {
       expectedPrice: route.price,
       resource: resourceUrl ?? url,
       accepts: p.paymentRequired.accepts.map((a) => {
-        const guardFailure = checkRequirement(a, resourceUrl);
+        const guardFailure = checkRequirement(a, resourceUrl, route);
         return {
           scheme: a.scheme,
           network: a.network,
@@ -197,7 +200,7 @@ export class PaymentRuntime {
 
   async runPaid(tool: PaidTool, input: string) {
     if (this.config.dryRun) return this.quote(tool);
-    const pay = this.getFetch();
+    const pay = this.getFetch(tool);
     const route = ROUTES[tool];
     let res: Response;
     try {
