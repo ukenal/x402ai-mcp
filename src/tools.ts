@@ -13,7 +13,13 @@ export function registerTools(server: McpServer, rt: PaymentRuntime): void {
     catch (e) { return fail(rt.scrub(e instanceof UserError || e instanceof Error ? e.message : "Unexpected error.")); }
   };
 
-  const inputSchema = z.object({ input: z.string().min(1).max(MAX_INPUT_CHARS) });
+  const inputSchema = z.object({
+    input: z
+      .string()
+      .min(1)
+      .max(MAX_INPUT_CHARS)
+      .describe(`The text to process, passed as "input": the text to embed or summarize, or for ask, the question. 1-${MAX_INPUT_CHARS} characters.`),
+  });
   const paid: Record<PaidTool, string> = {
     embed: "Compute a text embedding vector. Costs $0.01 (USDC on Base) per call.",
     summarize: "Summarize text. Costs $0.02 (USDC on Base) per call; takes 5-16 s.",
@@ -24,7 +30,7 @@ export function registerTools(server: McpServer, rt: PaymentRuntime): void {
       tool,
       {
         title: `x402ai ${tool}`,
-        description: `${paid[tool]} Spends real money; subject to a per-payment and per-session cap. Input max ${MAX_INPUT_CHARS} chars.`,
+        description: `${paid[tool]} Spends real money; subject to a per-payment and per-session cap. Pass the ${tool === "ask" ? "question" : "text"} in \`input\` (max ${MAX_INPUT_CHARS} chars).`,
         inputSchema,
         annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
@@ -63,7 +69,10 @@ export function registerTools(server: McpServer, rt: PaymentRuntime): void {
     {
       title: "x402 inspect",
       description: "Free, never signs or pays. Fetch an https URL unpaid, decode its x402 payment-required header, and check it with Coinbase CDP validate and merchant discovery. Sends the URL to api.cdp.coinbase.com.",
-      inputSchema: z.object({ url: z.string().min(1).max(2048), method: z.enum(["GET", "POST"]).default("POST") }),
+      inputSchema: z.object({
+        url: z.string().min(1).max(2048).describe("The https URL of the x402-protected endpoint to inspect (max 2048 chars)."),
+        method: z.enum(["GET", "POST"]).default("POST").describe("HTTP method for the unpaid probe request. Defaults to POST."),
+      }),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ url, method }) => run(() => inspectUrl(url, method))(),
