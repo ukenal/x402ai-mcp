@@ -25,6 +25,36 @@ This server holds a private key that can spend money. Use a **new wallet that ex
 dollars of USDC on Base at most. Payments are gasless for the payer (EIP-3009), so the wallet needs USDC only, no ETH.
 Never use a wallet that holds anything you can't afford to lose. The wallet balance is your real spending limit.
 
+## Can you trust this package?
+
+This server asks for a key that can spend money, and fake "x402 MCP" packages that steal keys have been reported.
+Don't take this README's word for it: the claims below are meant to be checked.
+
+- **The key never leaves your machine.** It is read once from `X402AI_BUYER_PRIVATE_KEY` and used only to sign
+  payment authorizations locally. It is never sent anywhere, never logged, and scrubbed from error messages.
+- **Every host it contacts:**
+  - `https://api.x402ai.dev`: the paid tools and `health`. Signed authorizations go only here, and only for the calling
+    tool's own route and price.
+  - `https://api.cdp.coinbase.com`: only when you run `inspect` (Coinbase's validator and merchant lookup).
+  - The URL you pass to `inspect`: one unpaid request with a fixed body. Nothing is signed.
+- **No telemetry, analytics or update checks.**
+- **Small and readable.** Five source files in `src/` (under 600 lines), built with `tsc` into `dist/`. The published
+  package contains only `dist/`, this README, `LICENSE` and `package.json`.
+- **Pinned dependencies.** Direct dependencies are pinned to exact versions. npm resolves *their* dependencies fresh,
+  within the ranges they declare, when you install, so those aren't frozen; the repository's `package-lock.json`
+  records the exact set that was tested. No dependency runs an install script. All dependencies have verified npm
+  registry signatures (`npm audit signatures`). The x402 client is `@x402/fetch` 2.28.0, with a per-payment cap set in
+  code.
+- **The spend safeguards stop honest code from overspending; they do nothing against a malicious package.** That is why
+  the points above are checkable.
+
+**How to check:** compare the published files with the source (`npm pack x402ai-mcp@<version>` downloads the exact
+tarball for inspection), confirm the package name is exactly `x402ai-mcp`, and read `src/`.
+
+**Don't run unvetted MCP servers in the same client as a funded key.** Any other program running as your user,
+including another MCP server, can typically read this process's environment and your client's config file, which holds
+the key in plain text.
+
 ## Install
 
 Requires Node.js 20 or later. Add it to your MCP client's configuration, for example:
