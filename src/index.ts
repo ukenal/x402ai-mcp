@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
-import { VERSION, loadConfig, log } from "./config.js";
+import { VERSION, loadConfig, log, scrubKey } from "./config.js";
 import { PaymentRuntime } from "./payment.js";
 import { registerTools } from "./tools.js";
 
@@ -23,6 +23,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  log("fatal:", e instanceof Error ? e.message : "startup failed");
+  const message = e instanceof Error ? e.message : "startup failed";
+  log("fatal:", scrubKey(message, process.env.X402AI_BUYER_PRIVATE_KEY?.trim()));
   process.exit(1);
 });

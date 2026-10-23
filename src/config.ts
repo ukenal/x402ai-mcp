@@ -25,6 +25,14 @@ export function log(...args: unknown[]): void {
   console.error("[x402ai-mcp]", ...args);
 }
 
+/** Replace the key's hex (with or without 0x/0X, any letter case) with "[redacted]". */
+export function scrubKey(text: string, key: string | undefined): string {
+  if (!key) return text;
+  const hex = key.trim().replace(/^0x/i, "").replace(/[^0-9a-f]/gi, "");
+  if (!hex) return text;
+  return text.replace(new RegExp(`(?:0x)?${hex}`, "gi"), "[redacted]");
+}
+
 /** "0.25" or "$0.25" -> atomic USDC units (6 decimals). Throws on bad input. */
 export function usdToAtomic(text: string): bigint {
   const m = /^\$?(\d{1,6})(?:\.(\d{1,6}))?$/.exec(text.trim());

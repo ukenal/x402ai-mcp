@@ -6,7 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
 import {
   BASE_URL, EXPECTED, MAX_PER_PAYMENT_USD, PAID_TIMEOUT_MS, PROBE_TIMEOUT_MS, ROUTES,
-  atomicToUsd, log, type Config, type PaidTool,
+  atomicToUsd, log, scrubKey, type Config, type PaidTool,
 } from "./config.js";
 
 /** An error whose message is safe and useful to show to the AI client. */
@@ -114,9 +114,7 @@ export class PaymentRuntime {
 
   /** Remove the key (with and without 0x) from any text before it can reach a client or the log. */
   scrub(text: string): string {
-    const key = this.config.privateKey;
-    if (!key) return text;
-    return text.split(key).join("[redacted]").split(key.slice(2)).join("[redacted]");
+    return scrubKey(text, this.config.privateKey);
   }
 
   private getAccount() {
