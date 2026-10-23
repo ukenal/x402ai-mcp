@@ -39,5 +39,13 @@
   "devDependencies": {
     "@types/node": "20.19.43",
     "typescript": "7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ukenal/x402ai-mcp.git"
+  },
+  "homepage": "https://github.com/ukenal/x402ai-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ukenal/x402ai-mcp/issues"
   }
 }
