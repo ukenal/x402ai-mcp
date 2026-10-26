@@ -1,0 +1,42 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ukenal/x402ai-mcp",
+  "description": "Pay-per-call AI tools (embed, summarize, ask) from x402ai, paid in USDC on Base via x402.",
+  "repository": {
+    "url": "https://github.com/ukenal/x402ai-mcp",
+    "source": "github"
+  },
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "x402ai-mcp",
+      "version": "0.1.1",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "X402AI_BUYER_PRIVATE_KEY",
+          "description": "Buyer wallet private key (hex), used only to sign payments locally. Needed only for the paid tools. Use a wallet holding only what you are willing to lose.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "X402AI_MAX_SESSION_USD",
+          "description": "Spending cap per server process in USD (default 0.25).",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string",
+          "default": "0.25"
+        },
+        {
+          "name": "X402AI_DRY_RUN",
+          "description": "Set to 1 to quote prices without signing or paying.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

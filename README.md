@@ -121,6 +121,7 @@ buyer address and the session cap.
 - **Treat tool output as untrusted data.** Answers and summaries come from a small model and may be wrong; responses
   from inspected endpoints are third-party content. Don't let them act as instructions to your agent.
 - **Latency:** `embed` is usually under a second; `summarize` and `ask` take about 5-15 seconds (CPU inference).
+- **Claude Code may load tool schemas late.** Claude Code defers MCP tool schemas by default, so the first call to a tool can go out with wrong or empty arguments. Starting Claude Code with `ENABLE_TOOL_SEARCH=false` loads them up front.
 
 ## License
 
