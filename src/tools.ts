@@ -2,7 +2,7 @@ import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { BASE_URL, MAX_INPUT_CHARS, ROUTES, atomicToUsd, type PaidTool } from "./config.js";
 import { inspectUrl } from "./inspect.js";
-import { PaymentRuntime, UserError } from "./payment.js";
+import { PaymentRuntime, UserError, noRedirectFetch } from "./payment.js";
 
 const ok = (data: unknown): CallToolResult => ({ content: [{ type: "text", text: JSON.stringify(data, null, 2) }] });
 const fail = (message: string): CallToolResult => ({ content: [{ type: "text", text: message }], isError: true });
@@ -48,7 +48,7 @@ export function registerTools(server: McpServer, rt: PaymentRuntime): void {
     run(async () => {
       let api: unknown;
       try {
-        const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(15_000) });
+        const res = await noRedirectFetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(15_000) });
         api = { status: res.status, body: (await res.text()).slice(0, 2000) };
       } catch (e) { api = { error: e instanceof Error ? e.message : String(e) }; }
       return {

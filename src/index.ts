@@ -5,9 +5,12 @@ import { VERSION, loadConfig, log, scrubKey } from "./config.js";
 import { PaymentRuntime } from "./payment.js";
 import { registerTools } from "./tools.js";
 
+let startupKey: string | undefined; // the key as loadConfig() read it; the env var is not read again
+
 async function main(): Promise<void> {
   console.log = console.error; // stdout is the MCP channel; stray logging must not corrupt it
   const config = loadConfig();
+  startupKey = config.scrubValue;
   const rt = new PaymentRuntime(config);
 
   const server = new McpServer({ name: "x402ai-mcp", version: VERSION });
@@ -24,6 +27,6 @@ async function main(): Promise<void> {
 
 main().catch((e) => {
   const message = e instanceof Error ? e.message : "startup failed";
-  log("fatal:", scrubKey(message, process.env.X402AI_BUYER_PRIVATE_KEY?.trim()));
+  log("fatal:", scrubKey(message, startupKey));
   process.exit(1);
 });

@@ -1,7 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { PROBE_TIMEOUT_MS } from "./config.js";
-import { probe } from "./payment.js";
+import { noRedirectFetch, probe } from "./payment.js";
 
 const CDP = "https://api.cdp.coinbase.com/platform/v2/x402";
 const MAX_REMOTE_TEXT = 20_000;
@@ -91,7 +91,7 @@ async function assertPublicHost(hostname: string): Promise<void> {
 
 async function cdpCall(url: string, init: RequestInit) {
   try {
-    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+    const res = await noRedirectFetch(url, { ...init, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     const text = (await res.text()).slice(0, MAX_REMOTE_TEXT);
     let body: unknown = text;
     try { body = JSON.parse(text); } catch { /* keep raw text */ }

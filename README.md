@@ -30,15 +30,18 @@ Never use a wallet that holds anything you can't afford to lose. The wallet bala
 This server asks for a key that can spend money, and fake "x402 MCP" packages that steal keys have been reported.
 Don't take this README's word for it: the claims below are meant to be checked.
 
-- **The key never leaves your machine.** It is read once from `X402AI_BUYER_PRIVATE_KEY` and used only to sign
-  payment authorizations locally. It is never sent anywhere, never logged, and scrubbed from error messages.
-- **Every host it contacts:**
-  - `https://api.x402ai.dev`: the paid tools and `health`. Signed authorizations go only here, and only for the calling
-    tool's own route and price.
+- **The package never sends or logs your key.** It is read once from `X402AI_BUYER_PRIVATE_KEY` and used only to sign
+  payment authorizations locally, and it is scrubbed from error messages. It stays in this process's environment and
+  memory while the server runs, so anything that can read those (other code in this process, other programs running as
+  your user, your client's config file) can read the key. Clearing the variable inside the process would not change
+  that, because Linux keeps a process's starting environment readable under /proc.
+- **Every host it contacts.** No request follows a redirect; a redirect is refused and the call fails.
+  - `https://api.x402ai.dev`: the paid tools and `health`. Signed authorizations go only here, only for the calling
+    tool's own route and price, and expire within 300 seconds.
   - `https://api.cdp.coinbase.com`: only when you run `inspect` (Coinbase's validator and merchant lookup).
-  - The URL you pass to `inspect`: one unpaid request with a fixed body. Nothing is signed.
+  - The URL you pass to `inspect`: one unpaid request (with a fixed body for POST). Nothing is signed.
 - **No telemetry, analytics or update checks.**
-- **Small and readable.** Five source files in `src/` (under 600 lines), built with `tsc` into `dist/`. The published
+- **Small and readable.** Five source files in `src/` (about 600 lines), built with `tsc` into `dist/`. The published
   package contains only `dist/`, this README, `LICENSE` and `package.json`.
 - **Pinned dependencies.** Direct dependencies are pinned to exact versions. npm resolves *their* dependencies fresh,
   within the ranges they declare, when you install, so those aren't frozen; the repository's `package-lock.json`
@@ -96,8 +99,13 @@ buyer address and the session cap.
 - **Per payment:** before signing, each paid tool checks that the challenge is for Base mainnet, USDC, x402ai's payment
   address, and **that tool's own route**, at or below that route's price. Anything else is refused. A per-payment
   maximum of $0.04 is enforced as a second check.
+- **Short-lived authorizations.** A challenge that asks for an authorization valid longer than 300 seconds is refused
+  before signing, so a leaked authorization cannot stay usable for long.
 - **Per session:** each payment attempt is reserved against `X402AI_MAX_SESSION_USD` before signing. Once the cap is
   reached, paid tools refuse until the server restarts.
+- **The session cap is per process.** It is counted in memory, resets when the server restarts, and each running copy
+  of the server gets its own cap, even with the same wallet. The wallet balance is the only hard limit: fund it with
+  only what you are willing to lose.
 - **The cap has no upper limit.** A typo such as `250` means $250. The wallet balance is the backstop that always holds.
 
 ## Things to know
@@ -108,7 +116,7 @@ buyer address and the session cap.
 - **`inspect` sends the URL you give it to Coinbase's CDP** (validator and merchant lookup). Don't inspect URLs you
   want to keep private.
 - **`inspect` refuses local and private addresses** (loopback, private ranges, link-local, CGNAT, IPv6 ULA, and IPv4
-  addresses wrapped in IPv6 forms), checked after DNS resolution. It allows https only and doesn't follow redirects.
+  addresses wrapped in IPv6 forms), checked after DNS resolution. It allows https only.
   A DNS change between the check and the request (DNS rebinding) is still possible.
 - **Treat tool output as untrusted data.** Answers and summaries come from a small model and may be wrong; responses
   from inspected endpoints are third-party content. Don't let them act as instructions to your agent.

@@ -9,6 +9,11 @@ import {
   atomicToUsd, log, scrubKey, type Config, type PaidTool,
 } from "./config.js";
 
+export const MAX_AUTH_LIFETIME_SECONDS = 300;
+
+/** Same signature as global fetch, but a redirect is an error: nothing (headers, signed payloads) is replayed to another URL. */
+export const noRedirectFetch: typeof fetch = (input, init) => fetch(input, { ...init, redirect: "error" });
+
 /** An error whose message is safe and useful to show to the AI client. */
 export class UserError extends Error {}
 
@@ -16,7 +21,7 @@ export class UserError extends Error {}
 
 /** Bound to the calling tool's own route: resource URL must equal BASE_URL + route.path exactly. */
 export function checkRequirement(
-  r: { payTo: string; asset: string; network: string; amount: string },
+  r: { payTo: string; asset: string; network: string; amount: string; maxTimeoutSeconds?: number },
   resourceUrl: string | undefined,
   route: (typeof ROUTES)[PaidTool],
 ): string | undefined {
@@ -27,6 +32,10 @@ export function checkRequirement(
   if (!/^\d+$/.test(r.amount)) return `amount ${r.amount} is not an atomic integer`;
   if (BigInt(r.amount) > route.maxAtomic) {
     return `amount ${r.amount} exceeds this route's cap of ${route.maxAtomic} (${route.price})`;
+  }
+  const t = r.maxTimeoutSeconds;
+  if (typeof t !== "number" || !Number.isInteger(t) || t <= 0 || t > MAX_AUTH_LIFETIME_SECONDS) {
+    return `maxTimeoutSeconds ${t ?? "(none)"} is not a positive integer of at most ${MAX_AUTH_LIFETIME_SECONDS}`;
   }
   return undefined;
 }
@@ -100,6 +109,12 @@ export async function probe(url: string, method: "GET" | "POST"): Promise<ProbeR
   }
 }
 
+/** fetch with redirect:"error" rejects with a TypeError whose cause (or message) mentions the redirect. */
+function isRedirectRefusal(e: unknown): boolean {
+  const text = (e instanceof Error ? `${e.message} ${(e.cause instanceof Error ? e.cause.message : "")}` : String(e));
+  return /redirect/i.test(text);
+}
+
 // ---- runtime ----------------------------------------------------------------
 
 export class PaymentRuntime {
@@ -158,7 +173,7 @@ export class PaymentRuntime {
       this.budget.release(BigInt(r.amount)); // nothing was signed
     });
 
-    const payingFetch = wrapFetchWithPayment(fetch, client);
+    const payingFetch = wrapFetchWithPayment(noRedirectFetch, client);
     this.fetchByTool.set(tool, payingFetch);
     return payingFetch;
   }
@@ -210,6 +225,9 @@ export class PaymentRuntime {
       });
     } catch (e) {
       const msg = this.scrub(e instanceof Error ? e.message : String(e));
+      if (isRedirectRefusal(e)) {
+        throw new UserError(this.scrub("Request failed: the server answered with a redirect, which is refused (no request follows a redirect)."));
+      }
       if (/timeout|aborted/i.test(msg) && !/Payment creation aborted/.test(msg)) {
         throw new UserError(`Request timed out after ${PAID_TIMEOUT_MS / 1000}s. A payment may already have been signed and settled; it is still counted against the session cap. Do not retry blindly.`);
       }

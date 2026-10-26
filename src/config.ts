@@ -49,6 +49,7 @@ export function atomicToUsd(atomic: bigint): string {
 export interface Config {
   privateKey: string | undefined; // normalized 0x + 64 hex; NEVER log
   keyProblem: string | undefined; // set when the env var is present but malformed
+  scrubValue: string | undefined; // trimmed raw env value, used only for scrubbing so a malformed key is still redacted; NEVER log
   maxSessionAtomic: bigint;
   dryRun: boolean;
 }
@@ -72,5 +73,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   const dry = env.X402AI_DRY_RUN?.trim().toLowerCase();
-  return { privateKey, keyProblem, maxSessionAtomic, dryRun: dry === "1" || dry === "true" };
+  return { privateKey, keyProblem, scrubValue: raw || undefined, maxSessionAtomic, dryRun: dry === "1" || dry === "true" };
 }
