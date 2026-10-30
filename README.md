@@ -41,12 +41,12 @@ Don't take this README's word for it: the claims below are meant to be checked.
   - `https://api.cdp.coinbase.com`: only when you run `inspect` (Coinbase's validator and merchant lookup).
   - The URL you pass to `inspect`: one unpaid request (with a fixed body for POST). Nothing is signed.
 - **No telemetry, analytics or update checks.**
-- **Small and readable.** Five source files in `src/` (about 600 lines), built with `tsc` into `dist/`. The published
+- **Small and readable.** Five source files in `src/` (about 660 lines), built with `tsc` into `dist/`. The published
   package contains only `dist/`, this README, `LICENSE` and `package.json`.
 - **Pinned dependencies.** Direct dependencies are pinned to exact versions. npm resolves *their* dependencies fresh,
   within the ranges they declare, when you install, so those aren't frozen; the repository's `package-lock.json`
   records the exact set that was tested. No dependency runs an install script. All dependencies have verified npm
-  registry signatures (`npm audit signatures`). The x402 client is `@x402/fetch` 2.28.0, with a per-payment cap set in
+  registry signatures (`npm audit signatures`). The x402 client is `@x402/fetch` 2.29.0, with a per-payment cap set in
   code.
 - **The spend safeguards stop honest code from overspending; they do nothing against a malicious package.** That is why
   the points above are checkable.
@@ -117,7 +117,10 @@ buyer address and the session cap.
   want to keep private.
 - **`inspect` refuses local and private addresses** (loopback, private ranges, link-local, CGNAT, IPv6 ULA, and IPv4
   addresses wrapped in IPv6 forms), checked after DNS resolution. It allows https only.
-  A DNS change between the check and the request (DNS rebinding) is still possible.
+  The request to the inspected URL checks the resolved addresses at connect time, in the same lookup the socket
+  uses, so a DNS answer that changes after the early check cannot reach a local or private address. It follows no
+  redirects and verifies the TLS hostname. This covers the request to the inspected URL; `inspect`'s calls to
+  Coinbase go to a fixed host.
 - **Treat tool output as untrusted data.** Answers and summaries come from a small model and may be wrong; responses
   from inspected endpoints are third-party content. Don't let them act as instructions to your agent.
 - **Latency:** `embed` is usually under a second; `summarize` and `ask` take about 5-15 seconds (CPU inference).

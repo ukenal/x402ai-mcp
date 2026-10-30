@@ -1,4 +1,4 @@
-export const VERSION = "0.1.1"; // keep in sync with package.json
+export const VERSION = "0.1.2"; // keep in sync with package.json
 
 export const BASE_URL = "https://api.x402ai.dev";
 export const EXPECTED = {

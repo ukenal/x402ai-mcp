@@ -1,7 +1,8 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { lookup as dnsLookup } from "node:dns/promises";
+import https from "node:https";
+import { isIP, type LookupFunction } from "node:net";
 import { PROBE_TIMEOUT_MS } from "./config.js";
-import { noRedirectFetch, probe } from "./payment.js";
+import { noRedirectFetch, parsePaymentRequired, type ProbeResult } from "./payment.js";
 
 const CDP = "https://api.cdp.coinbase.com/platform/v2/x402";
 const MAX_REMOTE_TEXT = 20_000;
@@ -45,7 +46,7 @@ function parseIPv6(addr: string): number[] | undefined {
 }
 
 /** True when the address is loopback, unspecified, private, link-local, CGNAT, ULA, or a mapped form of those. */
-function blockedAddress(address: string): boolean {
+export function blockedAddress(address: string): boolean {
   const family = isIP(address);
   if (family === 4) {
     const [a, b] = address.split(".").map(Number);
@@ -70,23 +71,73 @@ function blockedAddress(address: string): boolean {
   return true; // not an IP at all: refuse
 }
 
-/**
- * Refuse hosts that are, or resolve to, local/private addresses. The URL comes from the model, so
- * this limits SSRF. Caveat: DNS rebinding between this check and the later fetch is still possible,
- * because fetch resolves the name again on its own.
- */
-async function assertPublicHost(hostname: string): Promise<void> {
+export type Resolver = (hostname: string) => Promise<{ address: string; family: number }[]>;
+
+const defaultResolver: Resolver = (hostname) => dnsLookup(hostname, { all: true });
+
+const BLOCKED_MESSAGE = "inspect: local and private hosts are not allowed.";
+
+/** Lookup for the socket: resolves all addresses and refuses if any is blocked (so the check and the connect share one answer). */
+export function guardedLookup(resolve: Resolver = defaultResolver): LookupFunction {
+  return (hostname, options, callback) => {
+    const all = typeof options === "object" && options !== null && options.all === true;
+    resolve(hostname).then(
+      (addrs) => {
+        if (addrs.length === 0 || addrs.some((a) => blockedAddress(a.address))) {
+          callback(new Error(BLOCKED_MESSAGE), "", 4);
+          return;
+        }
+        if (all) (callback as unknown as (e: null, a: { address: string; family: number }[]) => void)(null, addrs);
+        else callback(null, addrs[0]!.address, addrs[0]!.family);
+      },
+      () => callback(new Error("inspect: could not resolve the hostname."), "", 4),
+    );
+  };
+}
+
+/** Early check, before any request. IP-literal URLs skip DNS at the socket, so this is what covers them. */
+async function assertPublicHost(hostname: string, resolve: Resolver): Promise<void> {
   const bare = hostname.replace(/^\[|\]$/g, "");
-  if (blockedName(bare)) throw new Error("inspect: local and private hosts are not allowed.");
+  if (blockedName(bare)) throw new Error(BLOCKED_MESSAGE);
   let addrs: { address: string }[];
   try {
-    addrs = await lookup(bare, { all: true });
+    addrs = await resolve(bare);
   } catch {
     throw new Error("inspect: could not resolve the hostname.");
   }
-  if (addrs.length === 0 || addrs.some((a) => blockedAddress(a.address))) {
-    throw new Error("inspect: local and private hosts are not allowed.");
-  }
+  if (addrs.length === 0 || addrs.some((a) => blockedAddress(a.address))) throw new Error(BLOCKED_MESSAGE);
+}
+
+/**
+ * Unpaid request that never signs anything. Addresses are checked by `lookup` at connect time, in the
+ * same lookup the socket uses, so a DNS answer that changes after the early check cannot reach a
+ * private address. No redirect is followed; only the status and the payment-required header are read.
+ */
+export function probePinned(url: URL, method: "GET" | "POST", lookup: LookupFunction): Promise<ProbeResult> {
+  return new Promise((resolve, reject) => {
+    const body = method === "POST" ? JSON.stringify({ input: "x402ai-mcp probe" }) : undefined;
+    const req = https.request(
+      url,
+      {
+        method,
+        lookup,
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+        headers: {
+          accept: "application/json",
+          ...(body !== undefined ? { "content-type": "application/json", "content-length": Buffer.byteLength(body) } : {}),
+        },
+      },
+      (res) => {
+        const h = res.headers["payment-required"];
+        const header = Array.isArray(h) ? h[0] : h;
+        const status = res.statusCode ?? 0;
+        res.destroy();
+        resolve(parsePaymentRequired(status, header));
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
 }
 
 async function cdpCall(url: string, init: RequestInit) {
@@ -101,14 +152,14 @@ async function cdpCall(url: string, init: RequestInit) {
   }
 }
 
-export async function inspectUrl(rawUrl: string, method: "GET" | "POST") {
+export async function inspectUrl(rawUrl: string, method: "GET" | "POST", resolve: Resolver = defaultResolver) {
   let url: URL;
   try { url = new URL(rawUrl); } catch { throw new Error("inspect: not a valid URL."); }
   if (url.protocol !== "https:") throw new Error("inspect: only https URLs are allowed.");
   if (url.username || url.password) throw new Error("inspect: URLs with embedded credentials are not allowed.");
-  await assertPublicHost(url.hostname);
+  await assertPublicHost(url.hostname, resolve);
 
-  const unpaid = await probe(url.href, method);
+  const unpaid = await probePinned(url, method, guardedLookup(resolve));
   const pr = unpaid.paymentRequired;
   const payTo = pr?.accepts.map((a) => a.payTo).find((p) => /^0x[0-9a-fA-F]{40}$/.test(p));
 

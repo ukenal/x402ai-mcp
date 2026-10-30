@@ -1,6 +1,6 @@
 {
   "name": "x402ai-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "mcpName": "io.github.ukenal/x402ai-mcp",
   "description": "Local stdio MCP server that lets an AI client buy embed, summarize and ask calls from api.x402ai.dev via x402 (USDC on Base), with per-payment and per-session spend caps.",
   "type": "module",
@@ -18,7 +18,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -32,9 +32,9 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
-    "@x402/core": "2.28.0",
-    "@x402/evm": "2.28.0",
-    "@x402/fetch": "2.28.0",
+    "@x402/core": "2.29.0",
+    "@x402/evm": "2.29.0",
+    "@x402/fetch": "2.29.0",
     "viem": "2.57.5",
     "zod": "4.6.7"
   },

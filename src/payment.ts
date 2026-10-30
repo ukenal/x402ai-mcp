@@ -98,14 +98,18 @@ export async function probe(url: string, method: "GET" | "POST"): Promise<ProbeR
     signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
   });
   await res.body?.cancel().catch(() => {});
-  const header = res.headers.get("payment-required");
-  if (!header) return { status: res.status, headerPresent: false };
+  return parsePaymentRequired(res.status, res.headers.get("payment-required"));
+}
+
+/** Decode a payment-required header value (shared by probe() and inspect's pinned probe). */
+export function parsePaymentRequired(status: number, header: string | null | undefined): ProbeResult {
+  if (!header) return { status, headerPresent: false };
   try {
     const parsed = PaymentRequiredSchema.safeParse(decodePaymentRequiredHeader(header));
-    if (!parsed.success) return { status: res.status, headerPresent: true, decodeError: "payment-required header does not match the expected shape" };
-    return { status: res.status, headerPresent: true, paymentRequired: parsed.data };
+    if (!parsed.success) return { status, headerPresent: true, decodeError: "payment-required header does not match the expected shape" };
+    return { status, headerPresent: true, paymentRequired: parsed.data };
   } catch (e) {
-    return { status: res.status, headerPresent: true, decodeError: e instanceof Error ? e.message : "decode failed" };
+    return { status, headerPresent: true, decodeError: e instanceof Error ? e.message : "decode failed" };
   }
 }
 
@@ -113,6 +117,18 @@ export async function probe(url: string, method: "GET" | "POST"): Promise<ProbeR
 function isRedirectRefusal(e: unknown): boolean {
   const text = (e instanceof Error ? `${e.message} ${(e.cause instanceof Error ? e.cause.message : "")}` : String(e));
   return /redirect/i.test(text);
+}
+
+export const REDIRECT_MESSAGE = "Request failed: the server answered with a redirect, which is refused (no request follows a redirect).";
+
+/** Map an error thrown by a paid request to the UserError shown to the client. */
+export function mapPaidError(e: unknown, scrub: (text: string) => string): UserError {
+  const msg = scrub(e instanceof Error ? e.message : String(e));
+  if (isRedirectRefusal(e)) return new UserError(scrub(REDIRECT_MESSAGE));
+  if (/timeout|aborted/i.test(msg) && !/Payment creation aborted/.test(msg)) {
+    return new UserError(`Request timed out after ${PAID_TIMEOUT_MS / 1000}s. A payment may already have been signed and settled; it is still counted against the session cap. Do not retry blindly.`);
+  }
+  return new UserError(msg);
 }
 
 // ---- runtime ----------------------------------------------------------------
@@ -224,14 +240,7 @@ export class PaymentRuntime {
         signal: AbortSignal.timeout(PAID_TIMEOUT_MS),
       });
     } catch (e) {
-      const msg = this.scrub(e instanceof Error ? e.message : String(e));
-      if (isRedirectRefusal(e)) {
-        throw new UserError(this.scrub("Request failed: the server answered with a redirect, which is refused (no request follows a redirect)."));
-      }
-      if (/timeout|aborted/i.test(msg) && !/Payment creation aborted/.test(msg)) {
-        throw new UserError(`Request timed out after ${PAID_TIMEOUT_MS / 1000}s. A payment may already have been signed and settled; it is still counted against the session cap. Do not retry blindly.`);
-      }
-      throw new UserError(msg);
+      throw mapPaidError(e, (t) => this.scrub(t));
     }
 
     const text = (await res.text()).slice(0, 200_000);

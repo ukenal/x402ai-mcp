@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.2 - 2026-10-30
+
+### Security
+- `inspect`: DNS rebinding is closed for the request to the inspected URL. The addresses are checked at connect time, in the same lookup the socket uses (`node:https` with a guarded `lookup` that refuses if any resolved address is local or private), so a DNS answer that changes after the early check cannot reach a private address. The early check stays, and covers IP-literal URLs. TLS hostname verification, no redirects and the read-only probe are unchanged.
+
+### Added
+- Offline tests: the guarded lookup (both callback shapes), a DNS-rebinding test with a local TCP server and a control, and the error message for a paid call that meets a redirect.
+
+### Fixed
+- `npm test` now runs on Node 20 and 22 (`node --test test/*.test.mjs`).
+- The error mapping for paid calls moved into an exported function so it can be tested; behavior unchanged. The payment-required header decoding is shared between `probe` and `inspect`.
+- Dependencies: `@x402/core`, `@x402/evm` and `@x402/fetch` pinned to 2.29.0.
+
 ## 0.1.1 - 2026-10-26
 
 Security fixes from an external review. Thanks to an external reviewer.
