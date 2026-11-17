@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3 - 2026-11-17
+
+### Added
+- `policy_check` tool ($0.01 per call, up to 20 actions): sends a profile (`baseline` or `strict`), the agent's context and 1-20 proposed actions to `POST /api/policy-check` and returns the engine's JSON unchanged as `result`. It checks actions; it does not enforce them. The input schema refuses locally only what the server would reject with 400 (unknown profile, 0 or more than 20 actions, any string over 2048 characters); per-action fields stay optional because the engine marks a missing or wrong field `needs_review`.
+- The payment path is the same as for the other paid tools: its own x402 client bound to `/api/policy-check` at most 10000 atomic USDC, the session cap, no redirects, the 300-second authorization limit, the same error mapping and key scrubbing. `X402AI_DRY_RUN=1` quotes the route without signing.
+- Offline tests: the route guard for `/api/policy-check` (10000 passes, 10001 and an `/api/embed` resource are refused) and the input schema limits.
+
+### Changed
+- The shared paid-request code now sends any JSON body; `embed`, `summarize` and `ask` behave as before.
+- `policy_check`: unknown keys on an action item are kept and forwarded to the server unchanged (the top level and `context` still drop them). Offline test: `{"type":"exec","cmd":"x"}` keeps `cmd`.
+
+### Fixed
+- Error scrubbing now also redacts the raw `X402AI_BUYER_PRIVATE_KEY` value when it is malformed, not only a valid key. Offline test with a malformed 63-digit key generated at run time.
+
 ## 0.1.2 - 2026-10-30
 
 ### Security

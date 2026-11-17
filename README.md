@@ -14,10 +14,31 @@ USDC authorization, and returns the result. Nothing is hosted for you and no acc
 | `embed`     | $0.01 | 768-dimension text embedding (nomic-embed-text) |
 | `summarize` | $0.02 | Summary of the input text (small local LLM) |
 | `ask`       | $0.04 | Short answer, 2-3 sentences; no web access, no memory, can be wrong |
+| `policy_check` | $0.01 | Checks up to 20 proposed agent actions against a `baseline` or `strict` policy; checks only, enforces nothing |
 | `health`    | free  | x402ai service status, plus this session's spend and remaining cap |
 | `inspect`   | free  | Takes a URL: decodes its 402 challenge, runs Coinbase's x402 validator and a Bazaar merchant lookup |
 
-Paid tools take one `input` string of up to 3,000 characters. `health` and `inspect` need no key.
+`embed`, `summarize` and `ask` take one `input` string of up to 3,000 characters. `health` and `inspect` need no key.
+
+`policy_check` takes a profile, the agent's context and 1-20 actions (`read`, `write`, `delete`, `exec`, `network`,
+`pay`, `self_modify`), and returns x402ai's policy engine JSON (`policy`, `results`, `summary`, `checked_rules`)
+unchanged as `result`. It only reports; nothing is blocked. A request looks like this:
+
+```json
+{
+  "profile": "baseline",
+  "context": { "workdir": "/home/dev/project", "home": "/home/dev", "sandboxed": true },
+  "actions": [
+    { "type": "write", "target": "~/.ssh/config" },
+    { "type": "exec", "command": "npm test" }
+  ]
+}
+```
+
+Fields per action type: `read`/`write`/`delete` take `target`; `exec` takes `command`; `network` takes `host`; `pay`
+takes `amount_usd`, `recipient` and `network`; `self_modify` takes `control` (`sandbox`, `network_allowlist`, `hooks`,
+`permissions`, `audit_log`) and `change` (`lower` or `raise`). A missing or wrong field comes back as `needs_review`.
+Strings are limited to 2,048 characters.
 
 ## Before you start: use a dedicated wallet
 
@@ -41,7 +62,7 @@ Don't take this README's word for it: the claims below are meant to be checked.
   - `https://api.cdp.coinbase.com`: only when you run `inspect` (Coinbase's validator and merchant lookup).
   - The URL you pass to `inspect`: one unpaid request (with a fixed body for POST). Nothing is signed.
 - **No telemetry, analytics or update checks.**
-- **Small and readable.** Five source files in `src/` (about 660 lines), built with `tsc` into `dist/`. The published
+- **Small and readable.** Five source files in `src/` (about 710 lines), built with `tsc` into `dist/`. The published
   package contains only `dist/`, this README, `LICENSE` and `package.json`.
 - **Pinned dependencies.** Direct dependencies are pinned to exact versions. npm resolves *their* dependencies fresh,
   within the ranges they declare, when you install, so those aren't frozen; the repository's `package-lock.json`

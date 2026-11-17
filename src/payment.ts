@@ -6,7 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
 import {
   BASE_URL, EXPECTED, MAX_PER_PAYMENT_USD, PAID_TIMEOUT_MS, PROBE_TIMEOUT_MS, ROUTES,
-  atomicToUsd, log, scrubKey, type Config, type PaidTool,
+  atomicToUsd, log, scrubKey, type Config, type PaidTool, type TextTool,
 } from "./config.js";
 
 export const MAX_AUTH_LIFETIME_SECONDS = 300;
@@ -143,16 +143,16 @@ export class PaymentRuntime {
     this.budget = new SessionBudget(config.maxSessionAtomic);
   }
 
-  /** Remove the key (with and without 0x) from any text before it can reach a client or the log. */
+  /** Remove the key (with and without 0x) and the raw env value (set even when malformed) from any text before it can reach a client or the log. */
   scrub(text: string): string {
-    return scrubKey(text, this.config.privateKey);
+    return scrubKey(scrubKey(text, this.config.privateKey), this.config.scrubValue);
   }
 
   private getAccount() {
     if (this.account) return this.account;
     if (this.config.keyProblem) throw new UserError(this.config.keyProblem);
     if (!this.config.privateKey) {
-      throw new UserError("X402AI_BUYER_PRIVATE_KEY is not set. Paid tools (embed, summarize, ask) need a funded Base USDC buyer key; health and inspect work without it.");
+      throw new UserError("X402AI_BUYER_PRIVATE_KEY is not set. Paid tools (embed, summarize, ask, policy_check) need a funded Base USDC buyer key; health and inspect work without it.");
     }
     let account;
     try {
@@ -227,8 +227,25 @@ export class PaymentRuntime {
     };
   }
 
-  async runPaid(tool: PaidTool, input: string) {
+  /** Text tools: send {input}, return the route's single result field. */
+  async runPaid(tool: TextTool, input: string) {
     if (this.config.dryRun) return this.quote(tool);
+    const route = ROUTES[tool];
+    const { body, payment } = await this.postPaid(tool, { input });
+    const value = (body as Record<string, unknown> | null)?.[route.field];
+    if (value === undefined) throw new UserError(`API response is missing "${route.field}".`);
+    return { tool, [route.field]: value, payment };
+  }
+
+  /** Structured tools: send the given JSON body, return the whole parsed response unchanged as `result`. */
+  async runPaidJson(tool: PaidTool, requestBody: unknown) {
+    if (this.config.dryRun) return this.quote(tool);
+    const { body, payment } = await this.postPaid(tool, requestBody);
+    return { tool, result: body, payment };
+  }
+
+  /** One paid POST through the tool's own bound client (guard, session cap, no redirects, error mapping, scrubbing). */
+  private async postPaid(tool: PaidTool, requestBody: unknown) {
     const pay = this.getFetch(tool);
     const route = ROUTES[tool];
     let res: Response;
@@ -236,7 +253,7 @@ export class PaymentRuntime {
       res = await pay(`${BASE_URL}${route.path}`, {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(PAID_TIMEOUT_MS),
       });
     } catch (e) {
@@ -260,11 +277,8 @@ export class PaymentRuntime {
 
     let body: unknown;
     try { body = JSON.parse(text); } catch { throw new UserError("API returned a non-JSON response."); }
-    const value = (body as Record<string, unknown> | null)?.[route.field];
-    if (value === undefined) throw new UserError(`API response is missing "${route.field}".`);
     return {
-      tool,
-      [route.field]: value,
+      body,
       payment: {
         priceUsd: route.price,
         settlement,

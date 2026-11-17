@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.ukenal/x402ai-mcp",
-  "description": "Pay-per-call AI tools (embed, summarize, ask) from x402ai, paid in USDC on Base via x402.",
+  "description": "Pay-per-call AI tools (embed, summarize, ask, policy-check) from x402ai, paid in USDC on Base.",
   "repository": {
     "url": "https://github.com/ukenal/x402ai-mcp",
     "source": "github"
   },
-  "version": "0.1.2",
+  "version": "0.1.3",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "x402ai-mcp",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {

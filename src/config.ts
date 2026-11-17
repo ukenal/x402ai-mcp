@@ -1,4 +1,4 @@
-export const VERSION = "0.1.2"; // keep in sync with package.json
+export const VERSION = "0.1.3"; // keep in sync with package.json
 
 export const BASE_URL = "https://api.x402ai.dev";
 export const EXPECTED = {
@@ -17,8 +17,12 @@ export const ROUTES = {
   embed: { path: "/api/embed", price: "$0.01", maxAtomic: 10_000n, field: "embedding" },
   summarize: { path: "/api/summarize", price: "$0.02", maxAtomic: 20_000n, field: "summary" },
   ask: { path: "/api/ask", price: "$0.04", maxAtomic: 40_000n, field: "answer" },
+  policy_check: { path: "/api/policy-check", price: "$0.01", maxAtomic: 10_000n, field: undefined }, // whole response is the result
 } as const;
 export type PaidTool = keyof typeof ROUTES;
+/** Paid tools that take one `input` string and return one field of the response. */
+export const TEXT_TOOLS = ["embed", "summarize", "ask"] as const satisfies readonly PaidTool[];
+export type TextTool = (typeof TEXT_TOOLS)[number];
 
 /** stdout carries the MCP protocol, so every log line goes to stderr. */
 export function log(...args: unknown[]): void {

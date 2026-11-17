@@ -1,8 +1,8 @@
 {
   "name": "x402ai-mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "mcpName": "io.github.ukenal/x402ai-mcp",
-  "description": "Local stdio MCP server that lets an AI client buy embed, summarize and ask calls from api.x402ai.dev via x402 (USDC on Base), with per-payment and per-session spend caps.",
+  "description": "Local stdio MCP server that lets an AI client buy embed, summarize, ask and policy-check calls from api.x402ai.dev via x402 (USDC on Base), with per-payment and per-session spend caps.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
